@@ -1,0 +1,94 @@
+# Copyright The brt-can-protocol Contributors
+# 验证默认协议库、可选帧转换、文档、交叉构建和发布前打包；不执行真实发布。
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  default:
+    name: 默认库
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: thumbv7em-none-eabihf, thumbv6m-none-eabi
+      - run: cargo fmt --check
+      - run: cargo test --locked --all-targets
+      - run: cargo test --locked --doc
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo doc --locked --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - run: cargo run --locked --example encode_decode
+      - run: cargo build --locked --lib --target thumbv7em-none-eabihf
+      - run: cargo build --locked --lib --target thumbv6m-none-eabi
+
+  embedded_can:
+    name: embedded-can
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo test --locked --all-targets --features embedded-can
+      - run: cargo test --locked --doc --features embedded-can
+      - run: cargo clippy --locked --all-targets --features embedded-can -- -D warnings
+      - run: cargo doc --locked --no-deps --features embedded-can
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  embassy:
+    name: Embassy STM32
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: thumbv7em-none-eabihf
+      - run: cargo test --locked --all-targets --features embassy-stm32,embassy-stm32/stm32h723vg
+      - run: cargo test --locked --doc --features embassy-stm32,embassy-stm32/stm32h723vg
+      - run: cargo clippy --locked --all-targets --features embassy-stm32,embassy-stm32/stm32h723vg -- -D warnings
+      - run: cargo doc --locked --no-deps --features embassy-stm32,embassy-stm32/stm32h723vg
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - run: cargo run --locked --example encode_decode --features embassy-stm32,embassy-stm32/stm32h723vg
+      - run: cargo build --locked --lib --target thumbv7em-none-eabihf --features embassy-stm32,embassy-stm32/stm32h723vg
+      - run: cargo build --locked --lib --target thumbv7em-none-eabihf --features embassy-stm32,embassy-stm32/stm32f405rg
+
+  msrv:
+    name: MSRV 1.85
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - run: cargo check --locked --lib
+      - run: cargo test --locked --all-targets
+      - run: cargo test --locked --doc
+      - run: cargo check --locked --lib --features embedded-can
+      - run: cargo test --locked --all-targets --features embedded-can
+      - run: cargo test --locked --doc --features embedded-can
+
+  package:
+    name: 依赖与发布前打包
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo tree --locked --edges normal
+      - run: cargo tree --locked --edges normal --features embedded-can
+      - run: cargo tree --locked --edges normal --features embassy-stm32,embassy-stm32/stm32h723vg
+      - run: cargo metadata --locked --format-version 1 --no-deps
+      - run: cargo metadata --locked --format-version 1 --no-deps --features embedded-can
+      - run: cargo metadata --locked --format-version 1 --no-deps --features embassy-stm32,embassy-stm32/stm32h723vg
+      - run: cargo package --locked
+      - run: cargo publish --locked --dry-run

@@ -1,0 +1,38 @@
+# Copyright The brt-can-protocol Contributors
+# 定义包元数据和可选帧转换依赖，默认构建不引入运行依赖。
+
+[package]
+name = "brt-can-protocol"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "硬件无关、no_std、无分配的布瑞特 BRT CAN V2.7 协议编解码库"
+repository = "https://github.com/MRNIU/brt-can-protocol"
+homepage = "https://github.com/MRNIU/brt-can-protocol"
+documentation = "https://docs.rs/brt-can-protocol"
+license = "MIT"
+readme = "README.md"
+keywords = ["brt", "can", "encoder", "embedded", "no-std"]
+categories = ["embedded", "hardware-support", "no-std", "encoding"]
+include = ["src/**", "tests/**", "examples/**", "README.md", "CONTRIBUTING.md", "VALIDATION.md", "LICENSE", "Cargo.toml", "Cargo.lock"]
+
+[features]
+default = []
+embedded-can = ["dep:embedded-can"]
+embassy-stm32 = ["embedded-can", "dep:embassy-stm32"]
+
+[dependencies]
+embedded-can = { version = "0.4.1", optional = true }
+embassy-stm32 = { version = "0.6.0", default-features = false, optional = true }
+
+[package.metadata.docs.rs]
+features = ["embedded-can", "embassy-stm32", "embassy-stm32/stm32h723vg"]
+default-target = "thumbv7em-none-eabihf"
+targets = ["thumbv7em-none-eabihf"]
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+
+[lints.rustdoc]
+broken_intra_doc_links = "deny"

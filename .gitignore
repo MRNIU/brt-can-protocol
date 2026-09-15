@@ -1,0 +1,3 @@
+# Copyright The brt-can-protocol Contributors
+# 排除本地构建、文档与打包产物。
+/target/
