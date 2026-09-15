@@ -1,5 +1,5 @@
 // Copyright The brt-can-protocol Contributors
-// 演示 BRT 位置请求和响应的纯协议编解码，不访问或控制 CAN 设备。
+// 演示 BRT 位置请求和响应的内存编解码。
 
 //! 演示位置请求、响应解码及可选 Embassy 帧的纯内存转换。
 

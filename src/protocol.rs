@@ -3,8 +3,7 @@
 
 //! 布瑞特 CAN 应用层协议。
 //!
-//! 协议依据见 README。本模块只转换显式地址、功能码和字段；
-//! 不访问 CAN 外设，也不推断设址命令是否已在设备端生效。
+//! 本模块提供地址、功能码和数据字段的无状态编解码，协议依据见 README。
 
 use core::fmt;
 
@@ -50,8 +49,8 @@ impl Address {
     /// 创建扩展 CAN 地址。
     ///
     /// `can_id` 必须在 `0..=0x1fff_ffff`；`device_id` 是数据域内独立的一字节设备 ID。
-    /// 厂商确认扩展地址模式下该字节取 ID 的低八位，例如
-    /// `Address::extended(0x18ff_f225, 0x25)`；适用范围见 README。
+    /// 扩展地址模式下该字节取 CAN ID 的低八位，例如
+    /// `Address::extended(0x18ff_f225, 0x25)`。
     /// 本函数保留调用方的显式值，不自动派生或校验二者关系；越界返回
     /// [`EncodeError::InvalidExtendedCanId`]。
     pub const fn extended(can_id: u32, device_id: u8) -> Result<Self, EncodeError> {
@@ -144,13 +143,13 @@ pub enum Request {
     ReadSpeed,
     /// 设定角速度采样时间，单位为毫秒，范围为 `0..=65535`。
     ///
-    /// 厂商确认示例 `1000` 在线上编码为大端字节 `0x03, 0xe8`。
+    /// `1000` 在线上编码为大端字节 `0x03, 0xe8`。
     SetSpeedSampleTime(u16),
     /// 将当前位置设为中点；固定参数为 `0x01`。
     SetMidpoint,
-    /// 设定当前位置值；线上字段为完整 `u32`，不裁决设备物理量程。
+    /// 设定当前位置值；线上字段为完整 `u32`，设备量程由调用方检查。
     ///
-    /// 厂商确认示例 `74565` 在线上编码为大端字节 `0x00, 0x01, 0x23, 0x45`。
+    /// `74565` 在线上编码为大端字节 `0x00, 0x01, 0x23, 0x45`。
     SetPosition(u32),
     /// 将当前位置设为五圈值；固定参数为 `0x01`。
     SetFiveTurns,
@@ -183,16 +182,14 @@ pub enum AckCommand {
 
 /// 普通写入命令的原始八位状态。
 ///
-/// 说明书只指定 `0` 为设备报告的成功，其他值为错误码；未知值必须原样保留。状态不证明
-/// 请求与响应的实际匹配，也不证明写入已应用或掉电持久化。
+/// `0` 表示成功，其他值为错误码；未知值原样保留。请求匹配和设备操作结果由调用方处理。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Status(pub u8);
 
 /// 扩展地址设定命令的原始 32 位状态。
 ///
-/// 按厂商答复使用大端，与扩展地址请求参数的端序一致，详见 README。
-/// 未知状态必须原样保留。状态不证明请求与响应的实际匹配或写入已应用、掉电持久化，且
-/// 不以任何状态值推断当前 CAN 地址。
+/// 线上字段为大端，`0` 表示成功，其他值为错误码；未知值原样保留。
+/// 请求匹配、地址变更和设备操作结果由调用方处理。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Status32(pub u32);
 
@@ -207,7 +204,7 @@ pub enum Response {
     Ack {
         /// 被确认的普通写入功能。
         command: AckCommand,
-        /// 设备返回的原始状态；`0` 仅是设备报告成功，不证明请求匹配、写入已应用或持久化。
+        /// 设备返回的原始状态，含义见 [`Status`]。
         status: Status,
     },
     /// 扩展地址设定功能的完整 32 位状态，线上字段为大端。
@@ -388,8 +385,8 @@ impl core::error::Error for DecodeError {}
 
 /// 将一个主机请求编码为 Classic CAN 数据帧。
 ///
-/// 成功仅表示请求可表示为协议帧，并不发送帧、不证明设备接收，也不表示设址等写入
-/// 已生效。`address` 完全由调用方指定，函数不会改变它。
+/// 返回包含完整地址和有效数据的帧；参数超出协议范围时返回 [`EncodeError`]。
+/// `address` 由调用方指定，帧发送由调用方执行。
 pub fn encode_request(address: Address, request: Request) -> Result<EncodedFrame, EncodeError> {
     let mut data = [0; 8];
     let (function, length) = match request {
@@ -463,8 +460,8 @@ pub fn encode_request(address: Address, request: Request) -> Result<EncodedFrame
 
 /// 将一个设备响应编码为 Classic CAN 数据帧。
 ///
-/// `address` 是调用方对本帧 CAN ID 和数据域设备 ID 的显式选择。特别是扩展地址设定的
-/// 32 位状态不会被解释为成功或失败，函数也不会替调用方猜测设备会用旧地址还是新地址回复。
+/// 使用调用方指定的 CAN ID 和设备 ID，按字段端序编码原始状态值。
+/// 设址应答使用的地址由调用方通过 `address` 指定。
 pub fn encode_response(address: Address, response: Response) -> Result<EncodedFrame, EncodeError> {
     let mut data = [0; 8];
     let (function, length) = match response {
@@ -582,8 +579,8 @@ pub fn decode_request(
 
 /// 将一个借用帧按设备响应方向解码。
 ///
-/// 位置、速度和状态均保留完整线上位模式。说明书没有独立给出自动回传帧布局，因此本函数
-/// 只按收到的 `0x01`／`0x0a` 格式解码，不把它们标记为自动回传，也不猜测无符号速度格式。
+/// 位置、速度和状态均保留完整线上位模式。位置和有符号速度分别按 `0x01`／`0x0a`
+/// 布局解析；返回值不区分查询应答与主动回传，无符号速度回传布局未实现。
 /// ID、帧形态、基本头、`LEN`、DLC 和设备 ID 的过滤顺序与 [`decode_request`] 相同；因此
 /// 无关 RTR／FD 仍会被拒绝，未知功能只会在完整头部已验证后返回 `Ok(None)`。
 /// 应答无请求方向的长度例外，`0x22` 应答必须为 `LEN=7, DLC=7`。
@@ -657,7 +654,7 @@ fn matched_data<'a>(
     if declared > 8 {
         return Err(DecodeError::DeclaredLengthExceedsClassicCan(declared));
     }
-    // 厂商仅确认 0x22 请求的 LEN 可填 4 或 7；实际 DLC 始终要求 7。
+    // 0x22 请求的 LEN 可填 4 或 7；实际 DLC 始终要求 7。
     let extended_request_length =
         is_request && data[2] == SET_EXTENDED_ADDRESS && declared == 4 && data.len() == 7;
     if usize::from(declared) != data.len() && !extended_request_length {

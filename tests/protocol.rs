@@ -1,5 +1,5 @@
 // Copyright The brt-can-protocol Contributors
-// 本文件以说明书和厂商勘误的独立字节验证 BRT CAN 协议编解码与拒绝规则。
+// 本文件以独立给定字节验证 BRT CAN 协议编解码与拒绝规则。
 
 //! BRT CAN 协议的给定字节测试。
 
@@ -50,7 +50,7 @@ fn response_case(address: Address, response: Response, bytes: &[u8]) {
 #[test]
 fn requests_encode_and_decode_every_documented_function() {
     let address = Address::standard(1);
-    // 厂商确认 0x22、0x0B、0x0D 的请求参数按示例使用大端；
+    // 0x22、0x0B、0x0D 的请求参数使用大端；
     // 0x22 编码统一采用 LEN=7，0x05 的回传周期仍为小端。
     for (request, bytes) in [
         (Request::ReadPosition, &[4, 1, 1, 0][..]),
@@ -89,7 +89,7 @@ fn requests_encode_and_decode_every_documented_function() {
 }
 
 #[test]
-fn vendor_confirmed_big_endian_requests_decode_given_bytes() {
+fn big_endian_requests_decode_given_bytes() {
     for address in [
         Address::standard(1),
         Address::extended(0x18ff_f201, 1).unwrap(),
@@ -238,7 +238,7 @@ fn extended_address_example_response_matches_explicit_new_address() {
 
 #[test]
 fn extended_address_response_decodes_big_endian_status_without_losing_bits() {
-    // 独立给定非零字节区分端序，不为该状态值推定具体错误含义。
+    // 非零且各不相同的字节用于区分端序并验证完整状态位。
     let address = Address::extended(0x18ff_f225, 0x25).unwrap();
     assert_eq!(
         decode_response(
@@ -535,7 +535,7 @@ fn rejects_invalid_values_and_malformed_matched_frames() {
 #[test]
 fn rejects_each_known_function_wrong_length_and_response_truncation_or_padding() {
     let address = Address::standard(1);
-    // 厂商仅允许 0x22 请求使用 LEN=4；应答必须使用 LEN=7。
+    // 仅 0x22 请求允许使用 LEN=4；应答必须使用 LEN=7。
     assert_eq!(
         decode_response(address, standard(1, &[4, 1, 0x22, 0, 0, 0, 0])),
         Err(DecodeError::LengthMismatch {

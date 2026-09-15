@@ -1,6 +1,6 @@
 // Copyright The brt-can-protocol Contributors
 
-//! BRT CAN 协议库入口，提供说明书版本明确的编解码和驱动无关帧类型。
+//! BRT CAN 协议库入口，提供编解码和驱动无关帧类型。
 //!
 //! 默认仅使用 core；可选适配只转换内存中的帧，不执行设备访问。
 

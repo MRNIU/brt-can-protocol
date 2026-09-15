@@ -3,7 +3,7 @@
 
 # 帧适配示例
 
-运行 `cargo run --example encode_decode` 演示内存中的请求与应答，不连接设备。
+运行 `cargo run --example encode_decode` 演示请求与应答的内存编解码。
 
 ## embedded-can
 
@@ -47,7 +47,7 @@ fn convert(encoded: &EncodedFrame) -> Result<(), FromEmbassyError> {
 
 两种输出容器均为 Classic 数据帧。接收时原样保留 FDF，非法头部长度返回 `FromEmbassyError`；协议层拒绝 FD，包括短 FD。`FdFrame` 中的 Classic RTR 只保留 DLC。
 
-芯片由消费方选择，一次只选一个具有 CAN 外设的芯片。使用 stable 验证 Embassy 0.6，不承诺其 MSRV 为 1.85。已验证 `thumbv7em-none-eabihf` 上的 H723（FDCAN）和 F405（bxCAN）；共享帧类型不代表 F405 支持 FD 收发。
+芯片由消费方选择，一次只选一个具有 CAN 外设的芯片。Embassy 0.6 适配使用 Rust stable，CI 覆盖 `thumbv7em-none-eabihf` 上的 H723（FDCAN）和 F405（bxCAN）；F405 仅支持 Classic CAN。
 
 ```sh
 cargo build --locked --lib --target thumbv7em-none-eabihf --features embassy-stm32,embassy-stm32/stm32h723vg
