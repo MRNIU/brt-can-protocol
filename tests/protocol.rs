@@ -1,5 +1,5 @@
 // Copyright The brt-can-protocol Contributors
-// 本文件以说明书中的独立字节验证 BRT CAN 协议编解码与拒绝规则。
+// 本文件以说明书和厂商勘误的独立字节验证 BRT CAN 协议编解码与拒绝规则。
 
 //! BRT CAN 协议的给定字节测试。
 
@@ -50,14 +50,14 @@ fn response_case(address: Address, response: Response, bytes: &[u8]) {
 #[test]
 fn requests_encode_and_decode_every_documented_function() {
     let address = Address::standard(1);
-    // 正文的四字节字段及小端规则优先：0x22 用 LEN=7，
-    // 0x0B 的 1000 和 0x0D 的 74565 不采用说明书示例中的错序字节。
+    // 厂商确认 0x22、0x0B、0x0D 的请求参数按示例使用大端；
+    // 0x22 编码统一采用 LEN=7，0x05 的回传周期仍为小端。
     for (request, bytes) in [
         (Request::ReadPosition, &[4, 1, 1, 0][..]),
         (Request::SetStandardAddress(8), &[4, 1, 2, 8]),
         (
             Request::SetExtendedAddress(0x18ff_f225),
-            &[7, 1, 0x22, 0x25, 0xf2, 0xff, 0x18],
+            &[7, 1, 0x22, 0x18, 0xff, 0xf2, 0x25],
         ),
         (Request::SetBaudRate(BaudRate::Mbps1), &[4, 1, 3, 1]),
         (
@@ -71,11 +71,11 @@ fn requests_encode_and_decode_every_documented_function() {
             &[4, 1, 7, 1],
         ),
         (Request::ReadSpeed, &[4, 1, 0x0a, 0]),
-        (Request::SetSpeedSampleTime(1000), &[5, 1, 0x0b, 0xe8, 3]),
+        (Request::SetSpeedSampleTime(1000), &[5, 1, 0x0b, 3, 0xe8]),
         (Request::SetMidpoint, &[4, 1, 0x0c, 1]),
         (
             Request::SetPosition(0x0001_2345),
-            &[7, 1, 0x0d, 0x45, 0x23, 1, 0],
+            &[7, 1, 0x0d, 0, 1, 0x23, 0x45],
         ),
         (Request::SetFiveTurns, &[4, 1, 0x0f, 1]),
     ] {
@@ -85,6 +85,167 @@ fn requests_encode_and_decode_every_documented_function() {
         Address::extended(0x18ff_f225, 0xa6).unwrap(),
         Request::ReadPosition,
         &[4, 0xa6, 1, 0],
+    );
+}
+
+#[test]
+fn vendor_confirmed_big_endian_requests_decode_given_bytes() {
+    for address in [
+        Address::standard(1),
+        Address::extended(0x18ff_f201, 1).unwrap(),
+    ] {
+        for (bytes, request) in [
+            (
+                &[7, 1, 0x22, 0x18, 0xff, 0xf2, 0x25][..],
+                Request::SetExtendedAddress(0x18ff_f225),
+            ),
+            (&[5, 1, 0x0b, 3, 0xe8], Request::SetSpeedSampleTime(1000)),
+            (&[7, 1, 0x0d, 0, 1, 0x23, 0x45], Request::SetPosition(74565)),
+            (
+                &[7, 1, 0x0d, 0x89, 0xab, 0xcd, 0xef],
+                Request::SetPosition(0x89ab_cdef),
+            ),
+        ] {
+            let frame = FrameRef {
+                id: address.id(),
+                payload: FramePayload::Data(bytes),
+            };
+            assert_eq!(decode_request(address, frame), Ok(Some(request)));
+            assert_eq!(encode_request(address, request).unwrap().data(), bytes);
+        }
+    }
+}
+
+#[test]
+fn extended_address_request_accepts_len_four_only_with_seven_data_bytes() {
+    for address in [
+        Address::standard(1),
+        Address::extended(0x18ff_f201, 1).unwrap(),
+    ] {
+        let frame = FrameRef {
+            id: address.id(),
+            payload: FramePayload::Data(&[4, 1, 0x22, 0x18, 0xff, 0xf2, 0x25]),
+        };
+        assert_eq!(
+            decode_request(address, frame),
+            Ok(Some(Request::SetExtendedAddress(0x18ff_f225)))
+        );
+        assert_eq!(
+            decode_response(address, frame),
+            Err(DecodeError::LengthMismatch {
+                declared: 4,
+                actual: 7,
+            })
+        );
+    }
+}
+
+#[test]
+fn extended_address_length_exception_keeps_header_and_frame_validation() {
+    let address = Address::standard(1);
+    for (bytes, error) in [
+        (
+            &[4, 1, 0x22, 0x18, 0xff, 0xf2][..],
+            DecodeError::LengthMismatch {
+                declared: 4,
+                actual: 6,
+            },
+        ),
+        (
+            &[4, 1, 0x22, 0x18, 0xff, 0xf2, 0x25, 0],
+            DecodeError::LengthMismatch {
+                declared: 4,
+                actual: 8,
+            },
+        ),
+        (
+            &[5, 1, 0x22, 0x18, 0xff, 0xf2, 0x25],
+            DecodeError::LengthMismatch {
+                declared: 5,
+                actual: 7,
+            },
+        ),
+        (
+            &[4, 1, 0x0d, 0, 1, 0x23, 0x45],
+            DecodeError::LengthMismatch {
+                declared: 4,
+                actual: 7,
+            },
+        ),
+        (
+            &[4, 1, 0x0b, 3, 0xe8],
+            DecodeError::LengthMismatch {
+                declared: 4,
+                actual: 5,
+            },
+        ),
+        (
+            &[4, 1, 0x7e, 0, 0, 0, 0],
+            DecodeError::LengthMismatch {
+                declared: 4,
+                actual: 7,
+            },
+        ),
+        (
+            &[4, 2, 0x22, 0x18, 0xff, 0xf2, 0x25],
+            DecodeError::DeviceIdMismatch {
+                expected: 1,
+                actual: 2,
+            },
+        ),
+        (
+            &[4, 1, 0x22, 0x20, 0, 0, 0],
+            DecodeError::InvalidExtendedCanId(0x2000_0000),
+        ),
+        (
+            &[7, 1, 0x22, 0x20, 0, 0, 0],
+            DecodeError::InvalidExtendedCanId(0x2000_0000),
+        ),
+    ] {
+        assert_eq!(decode_request(address, standard(1, bytes)), Err(error));
+    }
+    for (payload, error) in [
+        (
+            FramePayload::Remote { dlc: 7 },
+            DecodeError::UnsupportedRemoteFrame,
+        ),
+        (
+            FramePayload::Fd(&[4, 1, 0x22, 0x18, 0xff, 0xf2, 0x25]),
+            DecodeError::UnsupportedCanFd,
+        ),
+    ] {
+        assert_eq!(
+            decode_request(
+                address,
+                FrameRef {
+                    id: address.id(),
+                    payload
+                }
+            ),
+            Err(error)
+        );
+    }
+}
+
+#[test]
+fn extended_address_example_response_matches_explicit_new_address() {
+    let old = Address::standard(1);
+    let new = Address::extended(0x18ff_f225, 0x25).unwrap();
+    let bytes = &[7, 0x25, 0x22, 0, 0, 0, 0];
+    response_case(new, Response::SetExtendedAddress(Status32(0)), bytes);
+    assert_eq!(decode_response(old, extended(0x18ff_f225, bytes)), Ok(None));
+}
+
+#[test]
+fn extended_address_response_decodes_big_endian_status_without_losing_bits() {
+    // 独立给定非零字节区分端序，不为该状态值推定具体错误含义。
+    let address = Address::extended(0x18ff_f225, 0x25).unwrap();
+    assert_eq!(
+        decode_response(
+            address,
+            extended(0x18ff_f225, &[7, 0x25, 0x22, 0xfe, 0xdc, 0xba, 0x98]),
+        ),
+        Ok(Some(Response::SetExtendedAddress(Status32(0xfedc_ba98))))
     );
 }
 
@@ -148,7 +309,7 @@ fn responses_encode_and_decode_every_documented_function_and_status_bit() {
         ),
         (
             Response::SetExtendedAddress(Status32(0xfedc_ba98)),
-            &[7, 1, 0x22, 0x98, 0xba, 0xdc, 0xfe],
+            &[7, 1, 0x22, 0xfe, 0xdc, 0xba, 0x98],
         ),
     ] {
         response_case(address, response, bytes);
@@ -182,7 +343,7 @@ fn protocol_value_boundaries_are_not_physical_range_inference() {
         (Request::SetExtendedAddress(0), &[7, 1, 0x22, 0, 0, 0, 0]),
         (
             Request::SetExtendedAddress(0x1fff_ffff),
-            &[7, 1, 0x22, 0xff, 0xff, 0xff, 0x1f],
+            &[7, 1, 0x22, 0x1f, 0xff, 0xff, 0xff],
         ),
         (Request::SetReportingPeriod(50), &[5, 1, 5, 50, 0]),
         (
@@ -374,7 +535,7 @@ fn rejects_invalid_values_and_malformed_matched_frames() {
 #[test]
 fn rejects_each_known_function_wrong_length_and_response_truncation_or_padding() {
     let address = Address::standard(1);
-    // 0x22 示例的 LEN=4 与正文四字节状态冲突，不能接受 LEN/DLC 不一致。
+    // 厂商仅允许 0x22 请求使用 LEN=4；应答必须使用 LEN=7。
     assert_eq!(
         decode_response(address, standard(1, &[4, 1, 0x22, 0, 0, 0, 0])),
         Err(DecodeError::LengthMismatch {

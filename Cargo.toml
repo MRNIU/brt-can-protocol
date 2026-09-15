@@ -14,7 +14,7 @@ license = "MIT"
 readme = "README.md"
 keywords = ["brt", "can", "encoder", "embedded", "no-std"]
 categories = ["embedded", "hardware-support", "no-std", "encoding"]
-include = ["src/**", "tests/**", "examples/**", "README.md", "CONTRIBUTING.md", "LICENSE", "Cargo.toml", "Cargo.lock"]
+include = ["src/**", "tests/**", "examples/**", "README.md", "ERRATA.md", "CONTRIBUTING.md", "LICENSE", "Cargo.toml", "Cargo.lock"]
 
 [features]
 default = []

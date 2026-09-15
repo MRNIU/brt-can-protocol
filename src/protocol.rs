@@ -50,6 +50,10 @@ impl Address {
     /// 创建扩展 CAN 地址。
     ///
     /// `can_id` 必须在 `0..=0x1fff_ffff`；`device_id` 是数据域内独立的一字节设备 ID。
+    /// 厂商确认扩展地址模式下该字节取 ID 的低八位，例如
+    /// `Address::extended(0x18ff_f225, 0x25)`；适用范围见 README。
+    /// 本函数保留调用方的显式值，不自动派生或校验二者关系；越界返回
+    /// [`EncodeError::InvalidExtendedCanId`]。
     pub const fn extended(can_id: u32, device_id: u8) -> Result<Self, EncodeError> {
         if can_id <= MAX_EXTENDED_ID {
             Ok(Self {
@@ -123,6 +127,8 @@ pub enum Request {
     /// 设定新的标准 CAN 地址，范围为 `1..=255`。
     SetStandardAddress(u8),
     /// 设定新的 29 位扩展 CAN 地址，范围为 `0..=0x1fff_ffff`。
+    ///
+    /// 四字节请求参数使用大端；编码使用 `LEN=7`，解码也接受 `LEN=4, DLC=7`。
     SetExtendedAddress(u32),
     /// 设定 CAN 波特率。
     SetBaudRate(BaudRate),
@@ -138,13 +144,13 @@ pub enum Request {
     ReadSpeed,
     /// 设定角速度采样时间，单位为毫秒，范围为 `0..=65535`。
     ///
-    /// 正文示例 `1000` 在线上编码为小端字节 `0xe8, 0x03`。
+    /// 厂商确认示例 `1000` 在线上编码为大端字节 `0x03, 0xe8`。
     SetSpeedSampleTime(u16),
     /// 将当前位置设为中点；固定参数为 `0x01`。
     SetMidpoint,
     /// 设定当前位置值；线上字段为完整 `u32`，不裁决设备物理量程。
     ///
-    /// 正文示例 `74565` 在线上编码为小端字节 `0x45, 0x23, 0x01, 0x00`。
+    /// 厂商确认示例 `74565` 在线上编码为大端字节 `0x00, 0x01, 0x23, 0x45`。
     SetPosition(u32),
     /// 将当前位置设为五圈值；固定参数为 `0x01`。
     SetFiveTurns,
@@ -184,6 +190,7 @@ pub struct Status(pub u8);
 
 /// 扩展地址设定命令的原始 32 位状态。
 ///
+/// 按厂商答复使用大端，与扩展地址请求参数的端序一致，详见 README。
 /// 未知状态必须原样保留。状态不证明请求与响应的实际匹配或写入已应用、掉电持久化，且
 /// 不以任何状态值推断当前 CAN 地址。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -203,7 +210,7 @@ pub enum Response {
         /// 设备返回的原始状态；`0` 仅是设备报告成功，不证明请求匹配、写入已应用或持久化。
         status: Status,
     },
-    /// 扩展地址设定功能的完整 32 位状态。
+    /// 扩展地址设定功能的完整 32 位状态，线上字段为大端。
     SetExtendedAddress(Status32),
 }
 
@@ -401,7 +408,7 @@ pub fn encode_request(address: Address, request: Request) -> Result<EncodedFrame
             if value > MAX_EXTENDED_ID {
                 return Err(EncodeError::InvalidExtendedCanId(value));
             }
-            put_u32(&mut data, 3, value);
+            data[3..7].copy_from_slice(&value.to_be_bytes());
             (SET_EXTENDED_ADDRESS, 7)
         }
         Request::SetBaudRate(value) => {
@@ -432,7 +439,7 @@ pub fn encode_request(address: Address, request: Request) -> Result<EncodedFrame
             (READ_SPEED, 4)
         }
         Request::SetSpeedSampleTime(value) => {
-            put_u16(&mut data, 3, value);
+            data[3..5].copy_from_slice(&value.to_be_bytes());
             (SET_SPEED_SAMPLE_TIME, 5)
         }
         Request::SetMidpoint => {
@@ -440,7 +447,7 @@ pub fn encode_request(address: Address, request: Request) -> Result<EncodedFrame
             (SET_MIDPOINT, 4)
         }
         Request::SetPosition(value) => {
-            put_u32(&mut data, 3, value);
+            data[3..7].copy_from_slice(&value.to_be_bytes());
             (SET_POSITION, 7)
         }
         Request::SetFiveTurns => {
@@ -474,7 +481,7 @@ pub fn encode_response(address: Address, response: Response) -> Result<EncodedFr
             (ack_command_byte(command), 4)
         }
         Response::SetExtendedAddress(status) => {
-            put_u32(&mut data, 3, status.0);
+            data[3..7].copy_from_slice(&status.0.to_be_bytes());
             (SET_EXTENDED_ADDRESS, 7)
         }
     };
@@ -489,11 +496,12 @@ pub fn encode_response(address: Address, response: Response) -> Result<EncodedFr
 /// 先校验 ID 格式，并拒绝任意 RTR 或 CAN FD（包括其他设备的帧）。合法但 ID 不匹配的
 /// Classic 数据帧返回 `Ok(None)`；已匹配 ID 的帧先检查八字节上限、基本头、`LEN` 与实际
 /// DLC、设备 ID，随后才对未知功能返回 `Ok(None)`。已知功能不得接受补齐到八字节的尾部。
+/// 仅 `0x22` 请求允许 `LEN=4, DLC=7`，与 `LEN=7, DLC=7` 解码为同一个请求。
 pub fn decode_request(
     address: Address,
     frame: FrameRef<'_>,
 ) -> Result<Option<Request>, DecodeError> {
-    let data = matched_data(address, frame)?;
+    let data = matched_data(address, frame, true)?;
     let Some(data) = data else {
         return Ok(None);
     };
@@ -513,7 +521,7 @@ pub fn decode_request(
         }
         SET_EXTENDED_ADDRESS => {
             exact_length(data, function, 7)?;
-            let value = read_u32(data, 3);
+            let value = u32::from_be_bytes([data[3], data[4], data[5], data[6]]);
             if value > MAX_EXTENDED_ID {
                 return Err(DecodeError::InvalidExtendedCanId(value));
             }
@@ -551,7 +559,7 @@ pub fn decode_request(
         }
         SET_SPEED_SAMPLE_TIME => {
             exact_length(data, function, 5)?;
-            Request::SetSpeedSampleTime(read_u16(data, 3))
+            Request::SetSpeedSampleTime(u16::from_be_bytes([data[3], data[4]]))
         }
         SET_MIDPOINT => {
             exact_length(data, function, 4)?;
@@ -560,7 +568,7 @@ pub fn decode_request(
         }
         SET_POSITION => {
             exact_length(data, function, 7)?;
-            Request::SetPosition(read_u32(data, 3))
+            Request::SetPosition(u32::from_be_bytes([data[3], data[4], data[5], data[6]]))
         }
         SET_FIVE_TURNS => {
             exact_length(data, function, 4)?;
@@ -578,11 +586,12 @@ pub fn decode_request(
 /// 只按收到的 `0x01`／`0x0a` 格式解码，不把它们标记为自动回传，也不猜测无符号速度格式。
 /// ID、帧形态、基本头、`LEN`、DLC 和设备 ID 的过滤顺序与 [`decode_request`] 相同；因此
 /// 无关 RTR／FD 仍会被拒绝，未知功能只会在完整头部已验证后返回 `Ok(None)`。
+/// 应答无请求方向的长度例外，`0x22` 应答必须为 `LEN=7, DLC=7`。
 pub fn decode_response(
     address: Address,
     frame: FrameRef<'_>,
 ) -> Result<Option<Response>, DecodeError> {
-    let data = matched_data(address, frame)?;
+    let data = matched_data(address, frame, false)?;
     let Some(data) = data else {
         return Ok(None);
     };
@@ -598,7 +607,9 @@ pub fn decode_response(
         }
         SET_EXTENDED_ADDRESS => {
             exact_length(data, function, 7)?;
-            Response::SetExtendedAddress(Status32(read_u32(data, 3)))
+            Response::SetExtendedAddress(Status32(u32::from_be_bytes([
+                data[3], data[4], data[5], data[6],
+            ])))
         }
         _ => {
             let Some(command) = parse_ack_command(function) else {
@@ -617,6 +628,7 @@ pub fn decode_response(
 fn matched_data<'a>(
     address: Address,
     frame: FrameRef<'a>,
+    is_request: bool,
 ) -> Result<Option<&'a [u8]>, DecodeError> {
     match frame.id {
         FrameId::Standard(id) if id > MAX_STANDARD_ID => {
@@ -645,7 +657,10 @@ fn matched_data<'a>(
     if declared > 8 {
         return Err(DecodeError::DeclaredLengthExceedsClassicCan(declared));
     }
-    if usize::from(declared) != data.len() {
+    // 厂商仅确认 0x22 请求的 LEN 可填 4 或 7；实际 DLC 始终要求 7。
+    let extended_request_length =
+        is_request && data[2] == SET_EXTENDED_ADDRESS && declared == 4 && data.len() == 7;
+    if usize::from(declared) != data.len() && !extended_request_length {
         return Err(DecodeError::LengthMismatch {
             declared,
             actual: data.len(),
