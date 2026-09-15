@@ -14,7 +14,7 @@
 pub mod compat;
 /// 与驱动无关的输入视图和固定容量编码结果。
 pub mod frame;
-/// 供应商 V2.7 说明书的应用层协议；不是已确认的设备固件版本。
-pub mod v2_7;
+/// BRT CAN 应用层协议，版本依据见 README。
+pub mod protocol;
 
 pub use frame::{EncodedFrame, FrameId, FramePayload, FrameRef};

@@ -1,9 +1,9 @@
 // Copyright The brt-can-protocol Contributors
-// 本文件实现供应商说明书 V2.7 所载 CAN 指令表的无状态、驱动无关编解码。
+// 本文件实现供应商 CAN 指令表的无状态、驱动无关编解码。
 
-//! 布瑞特 CAN 应用层协议 V2.7。
+//! 布瑞特 CAN 应用层协议。
 //!
-//! 本模块对应说明书中的协议版本，而非设备固件版本。它只转换显式地址、功能码和字段；
+//! 协议依据见 README。本模块只转换显式地址、功能码和字段；
 //! 不访问 CAN 外设，也不推断设址命令是否已在设备端生效。
 
 use core::fmt;
@@ -115,7 +115,7 @@ pub enum Direction {
     Counterclockwise,
 }
 
-/// 主机发送的全部 V2.7 功能请求。
+/// 主机发送的全部功能请求。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Request {
     /// 读取位置值；固定参数为 `0x00`。
@@ -189,7 +189,7 @@ pub struct Status(pub u8);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Status32(pub u32);
 
-/// 从设备返回的 V2.7 消息。
+/// 从设备返回的消息。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Response {
     /// 位置原始值，线上字段为完整 `u32`。
@@ -207,7 +207,7 @@ pub enum Response {
     SetExtendedAddress(Status32),
 }
 
-/// 无法将值表示成 V2.7 CAN 帧时的错误。
+/// 无法将值表示成 CAN 帧时的错误。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EncodeError {
     /// 29 位扩展 CAN ID 超出 `0..=0x1fff_ffff`。
@@ -239,7 +239,7 @@ impl fmt::Display for EncodeError {
 
 impl core::error::Error for EncodeError {}
 
-/// 无法将输入帧解释为 V2.7 消息时的错误。
+/// 无法将输入帧解释为协议消息时的错误。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DecodeError {
     /// 标准 CAN ID 超出 11 位。

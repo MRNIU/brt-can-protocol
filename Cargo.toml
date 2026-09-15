@@ -6,7 +6,7 @@ name = "brt-can-protocol"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
-description = "硬件无关、no_std、无分配的布瑞特 BRT CAN V2.7 协议编解码库"
+description = "硬件无关、no_std、无分配的布瑞特 BRT CAN 协议编解码库"
 repository = "https://github.com/MRNIU/brt-can-protocol"
 homepage = "https://github.com/MRNIU/brt-can-protocol"
 documentation = "https://docs.rs/brt-can-protocol"
@@ -14,7 +14,7 @@ license = "MIT"
 readme = "README.md"
 keywords = ["brt", "can", "encoder", "embedded", "no-std"]
 categories = ["embedded", "hardware-support", "no-std", "encoding"]
-include = ["src/**", "tests/**", "examples/**", "README.md", "CONTRIBUTING.md", "VALIDATION.md", "LICENSE", "Cargo.toml", "Cargo.lock"]
+include = ["src/**", "tests/**", "examples/**", "README.md", "CONTRIBUTING.md", "LICENSE", "Cargo.toml", "Cargo.lock"]
 
 [features]
 default = []

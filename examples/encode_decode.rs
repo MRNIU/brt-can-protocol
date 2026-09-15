@@ -5,7 +5,7 @@
 
 #[cfg(feature = "embassy-stm32")]
 use brt_can_protocol::EncodedFrame;
-use brt_can_protocol::v2_7::{Address, Request, Response, decode_response, encode_request};
+use brt_can_protocol::protocol::{Address, Request, Response, decode_response, encode_request};
 use brt_can_protocol::{FrameId, FramePayload, FrameRef};
 
 fn main() {
