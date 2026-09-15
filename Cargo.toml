@@ -3,7 +3,7 @@
 
 [package]
 name = "brt-can-protocol"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.85"
 description = "硬件无关、no_std、无分配的布瑞特 BRT CAN 协议编解码库"

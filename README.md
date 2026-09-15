@@ -3,18 +3,26 @@
 
 # brt-can-protocol
 
+[![CI](https://github.com/MRNIU/brt-can-protocol/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MRNIU/brt-can-protocol/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/brt-can-protocol.svg)](https://crates.io/crates/brt-can-protocol)
+[![docs.rs](https://docs.rs/brt-can-protocol/badge.svg)](https://docs.rs/brt-can-protocol)
+[![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/MRNIU/brt-can-protocol/blob/main/LICENSE)
+[![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0/)
+
 布瑞特 BRT CAN 协议编解码库。Rust 2024，默认 `no_std`、无 `alloc`、零运行依赖，MSRV 为 Rust 1.85。库只转换协议值和 CAN 帧；收发、时序、重试、标定、物理换算与控制由调用方负责。
 
-## 协议依据
+[API 文档](https://docs.rs/brt-can-protocol) · [帧适配示例](https://github.com/MRNIU/brt-can-protocol/blob/main/examples/README.md) · [协议勘误](https://github.com/MRNIU/brt-can-protocol/blob/main/ERRATA.md) · [贡献指南](https://github.com/MRNIU/brt-can-protocol/blob/main/CONTRIBUTING.md)
 
-协议依据：[《拉绳位移传感器 CAN 通信 V2.7》](https://www.buruiter.com/wp-content/uploads/2025/10/004-%E6%8B%89%E7%BB%B3%E4%BD%8D%E7%A7%BB%E4%BC%A0%E6%84%9F%E5%99%A8CAN%E9%80%9A%E4%BF%A1-V2.7.pdf) 印刷页 13–19。说明书中的长度、端序和波特率勘误见 [ERRATA.md](https://github.com/MRNIU/brt-can-protocol/blob/main/ERRATA.md)。
-
-## 安装与使用
+## 安装
 
 ```toml
 [dependencies]
-brt-can-protocol = "0.1.0"
+brt-can-protocol = "0.1.1"
 ```
+
+Rust 中的 crate 名为 `brt_can_protocol`。默认库与 `embedded-can` feature 支持 Rust 1.85；`embassy-stm32` 适配使用 Rust stable。
+
+## 快速开始
 
 ```rust
 use brt_can_protocol::protocol::{Address, Request, Response, encode_request, decode_response};
@@ -32,7 +40,17 @@ let frame = FrameRef {
 assert_eq!(decode_response(address, frame).unwrap(), Some(Response::Position(74_565)));
 ```
 
-`protocol` 提供 `encode_request`、`decode_request`、`encode_response`、`decode_response`。编码结果使用八字节固定缓冲，`FrameRef` 借用输入数据。运行内存示例：`cargo run --example encode_decode`。
+`protocol` 提供 `encode_request`、`decode_request`、`encode_response`、`decode_response`。编码结果使用八字节固定缓冲，`FrameRef` 借用输入数据。
+
+运行完整的[内存编解码示例](https://github.com/MRNIU/brt-can-protocol/blob/main/examples/encode_decode.rs)：
+
+```sh
+cargo run --locked --example encode_decode
+```
+
+## 协议依据
+
+协议依据：[《拉绳位移传感器 CAN 通信 V2.7》](https://www.buruiter.com/wp-content/uploads/2025/10/004-%E6%8B%89%E7%BB%B3%E4%BD%8D%E7%A7%BB%E4%BC%A0%E6%84%9F%E5%99%A8CAN%E9%80%9A%E4%BF%A1-V2.7.pdf) 印刷页 13–19。说明书中的长度、端序和波特率勘误见 [ERRATA.md](https://github.com/MRNIU/brt-can-protocol/blob/main/ERRATA.md)。
 
 ## 功能覆盖
 
@@ -72,6 +90,10 @@ assert_eq!(decode_response(address, frame).unwrap(), Some(Response::Position(74_
 
 具体依赖、目标与接入片段见 [examples/README.md](https://github.com/MRNIU/brt-can-protocol/blob/main/examples/README.md)。原生适配保留 FDF，短 FD 也不会伪装成 Classic 帧。
 
-## 贡献与许可
+## 贡献
 
-验证与提交要求见 [CONTRIBUTING.md](https://github.com/MRNIU/brt-can-protocol/blob/main/CONTRIBUTING.md)。采用 [MIT License](https://github.com/MRNIU/brt-can-protocol/blob/main/LICENSE)。
+欢迎提交 [Pull Request](https://github.com/MRNIU/brt-can-protocol/pulls)。开发验证与提交要求见 [CONTRIBUTING.md](https://github.com/MRNIU/brt-can-protocol/blob/main/CONTRIBUTING.md)。
+
+## 许可证
+
+本项目采用 [MIT License](https://github.com/MRNIU/brt-can-protocol/blob/main/LICENSE)。复用源码中的原版权声明保留在相应文件中。

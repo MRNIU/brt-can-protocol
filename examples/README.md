@@ -7,7 +7,7 @@
 
 ## embedded-can
 
-依赖：`brt-can-protocol = { version = "0.1.0", features = ["embedded-can"] }`、`embedded-can = "0.4.1"`。支持 Rust 1.85。
+依赖：`brt-can-protocol = { version = "0.1.1", features = ["embedded-can"] }`、`embedded-can = "0.4.1"`。支持 Rust 1.85。
 
 ```rust
 use brt_can_protocol::{EncodedFrame, FrameRef};
@@ -28,7 +28,7 @@ fn borrow<F: embedded_can::Frame>(frame: &F) -> Result<FrameRef<'_>, InvalidFram
 
 ```toml
 [dependencies]
-brt-can-protocol = { version = "0.1.0", features = ["embassy-stm32"] }
+brt-can-protocol = { version = "0.1.1", features = ["embassy-stm32"] }
 embassy-stm32 = { version = "0.6", default-features = false, features = ["stm32h723vg"] }
 ```
 
