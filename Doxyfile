@@ -1,0 +1,17 @@
+# Copyright The odrive-can-driver Contributors
+# Copyright The brt-can-protocol Contributors
+# 从公开头文件生成中文 C API 文档，文档警告视为验证失败。
+
+PROJECT_NAME           = brt-can-protocol
+OUTPUT_LANGUAGE        = Chinese
+INPUT                  = c/include/brt_can_protocol
+OUTPUT_DIRECTORY       = target
+HTML_OUTPUT            = doxygen
+OPTIMIZE_OUTPUT_FOR_C  = YES
+GENERATE_LATEX         = NO
+HAVE_DOT               = NO
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_NO_PARAMDOC       = YES
+WARN_IF_UNDOC_ENUM_VAL  = YES
+WARN_AS_ERROR          = FAIL_ON_WARNINGS

@@ -1,0 +1,135 @@
+# Copyright The brt-can-protocol Contributors
+# 两种语言分别验证的 BRT CAN V2.7 协议向量。每列以制表符分隔。
+# 用例	操作	目标格式	目标ID	设备ID	帧ID格式	帧ID	帧型	有效数据	功能码	消息值	结果
+# *_both 分别验证编码和解码，*_decode 只解码，req_encode 只编码。
+# data/fd 的数据列为连续十六进制字节或空数据 -，rtr 的数据列为 DLC。
+# 功能码和消息值独立于字节列。固定参数的请求以 0 表示无调用方参数。
+# - 表示该字段不适用。解码失败或忽略时没有消息，编码失败时没有帧。
+
+# 规范请求，包含全部功能码、枚举值和原始字段边界。
+read_position	req_both	std	1	1	std	1	data	04010100	0x01	0	ok
+set_standard_address	req_both	std	1	1	std	1	data	04010208	0x02	8	ok
+set_standard_address_min	req_both	std	1	1	std	1	data	04010201	0x02	1	ok
+set_standard_address_max	req_both	std	1	1	std	1	data	040102FF	0x02	255	ok
+set_extended_address	req_both	std	1	1	std	1	data	07012218FFF225	0x22	0x18fff225	ok
+set_extended_address_from_extended	req_both	ext	0x18fff201	1	ext	0x18fff201	data	07012218FFF225	0x22	0x18fff225	ok
+set_extended_address_min	req_both	std	1	1	std	1	data	07012200000000	0x22	0	ok
+set_extended_address_max	req_both	std	1	1	std	1	data	0701221FFFFFFF	0x22	0x1fffffff	ok
+baud_500kbps	req_both	std	1	1	std	1	data	04010300	0x03	0	ok
+baud_1000kbps	req_both	std	1	1	std	1	data	04010301	0x03	1	ok
+baud_250kbps	req_both	std	1	1	std	1	data	04010302	0x03	2	ok
+baud_125kbps	req_both	std	1	1	std	1	data	04010303	0x03	3	ok
+baud_100kbps	req_both	std	1	1	std	1	data	04010304	0x03	4	ok
+mode_query	req_both	std	1	1	std	1	data	04010400	0x04	0	ok
+mode_standard_position	req_both	std	1	1	std	1	data	040104AA	0x04	0xaa	ok
+mode_standard_signed_speed	req_both	std	1	1	std	1	data	04010402	0x04	2	ok
+mode_standard_unsigned_speed	req_both	std	1	1	std	1	data	04010407	0x04	7	ok
+mode_extended_position	req_both	std	1	1	std	1	data	04010418	0x04	0x18	ok
+mode_extended_signed_speed	req_both	std	1	1	std	1	data	04010412	0x04	0x12	ok
+mode_extended_unsigned_speed	req_both	std	1	1	std	1	data	04010417	0x04	0x17	ok
+set_reporting_period_1000us	req_both	std	1	1	std	1	data	050105E803	0x05	1000	ok
+set_reporting_period_min	req_both	std	1	1	std	1	data	0501053200	0x05	50	ok
+set_reporting_period_max	req_both	std	1	1	std	1	data	050105FFFF	0x05	65535	ok
+set_zero	req_both	std	1	1	std	1	data	04010600	0x06	0	ok
+set_clockwise	req_both	std	1	1	std	1	data	04010700	0x07	0	ok
+set_counterclockwise	req_both	std	1	1	std	1	data	04010701	0x07	1	ok
+read_speed	req_both	std	1	1	std	1	data	04010A00	0x0a	0	ok
+set_speed_sample_time_1000ms	req_both	std	1	1	std	1	data	05010B03E8	0x0b	1000	ok
+set_speed_sample_time_from_extended	req_both	ext	0x18fff201	1	ext	0x18fff201	data	05010B03E8	0x0b	1000	ok
+set_speed_sample_time_min	req_both	std	1	1	std	1	data	05010B0000	0x0b	0	ok
+set_speed_sample_time_max	req_both	std	1	1	std	1	data	05010BFFFF	0x0b	65535	ok
+set_midpoint	req_both	std	1	1	std	1	data	04010C01	0x0c	0	ok
+set_position_74565	req_both	std	1	1	std	1	data	07010D00012345	0x0d	74565	ok
+set_position_from_extended	req_both	ext	0x18fff201	1	ext	0x18fff201	data	07010D00012345	0x0d	74565	ok
+set_position_high_bit	req_both	std	1	1	std	1	data	07010D89ABCDEF	0x0d	0x89abcdef	ok
+set_position_high_bit_from_extended	req_both	ext	0x18fff201	1	ext	0x18fff201	data	07010D89ABCDEF	0x0d	0x89abcdef	ok
+set_position_min	req_both	std	1	1	std	1	data	07010D00000000	0x0d	0	ok
+set_position_max	req_both	std	1	1	std	1	data	07010DFFFFFFFF	0x0d	0xffffffff	ok
+set_five_turns	req_both	std	1	1	std	1	data	04010F01	0x0f	0	ok
+read_position_standard_id_min	req_both	std	0	0	std	0	data	04000100	0x01	0	ok
+read_position_standard_id_max	req_both	std	255	255	std	255	data	04FF0100	0x01	0	ok
+read_position_extended_id_min	req_both	ext	0	0	ext	0	data	04000100	0x01	0	ok
+read_position_extended_id_max	req_both	ext	0x1fffffff	255	ext	0x1fffffff	data	04FF0100	0x01	0	ok
+read_position_extended_independent_device	req_both	ext	0x18fff225	0xa6	ext	0x18fff225	data	04A60100	0x01	0	ok
+
+# 规范应答。位置查询与主动回传共用 0x01 的线上格式。
+position_74565	rsp_both	std	1	1	std	1	data	07010145230100	0x01	74565	ok
+position_high_bit	rsp_both	std	1	1	std	1	data	07010145230180	0x01	0x80012345	ok
+position_min	rsp_both	std	1	1	std	1	data	07010100000000	0x01	0	ok
+position_max	rsp_both	std	1	1	std	1	data	070101FFFFFFFF	0x01	0xffffffff	ok
+speed_negative	rsp_both	std	1	1	std	1	data	07010ABBDCFEFF	0x0a	-74565	ok
+speed_min	rsp_both	std	1	1	std	1	data	07010A00000080	0x0a	-2147483648	ok
+speed_max	rsp_both	std	1	1	std	1	data	07010AFFFFFF7F	0x0a	2147483647	ok
+ack_standard_address	rsp_both	std	1	1	std	1	data	040102FF	0x02	255	ok
+ack_baud	rsp_both	std	1	1	std	1	data	040103FF	0x03	255	ok
+ack_mode	rsp_both	std	1	1	std	1	data	040104FF	0x04	255	ok
+ack_period	rsp_both	std	1	1	std	1	data	040105FF	0x05	255	ok
+ack_zero	rsp_both	std	1	1	std	1	data	040106FF	0x06	255	ok
+ack_zero_success	rsp_both	std	1	1	std	1	data	04010600	0x06	0	ok
+ack_direction	rsp_both	std	1	1	std	1	data	040107FF	0x07	255	ok
+ack_sample_time	rsp_both	std	1	1	std	1	data	04010BFF	0x0b	255	ok
+ack_midpoint	rsp_both	std	1	1	std	1	data	04010CFF	0x0c	255	ok
+ack_position	rsp_both	std	1	1	std	1	data	04010DFF	0x0d	255	ok
+ack_five_turns	rsp_both	std	1	1	std	1	data	04010FFF	0x0f	255	ok
+ack_new_standard_address	rsp_both	std	8	8	std	8	data	04080200	0x02	0	ok
+ack_new_extended_address	rsp_both	ext	0x18fff225	0x25	ext	0x18fff225	data	07252200000000	0x22	0	ok
+ack_extended_address_raw_status	rsp_both	std	1	1	std	1	data	070122FEDCBA98	0x22	0xfedcba98	ok
+ack_extended_address_max	rsp_both	std	1	1	std	1	data	070122FFFFFFFF	0x22	0xffffffff	ok
+ack_extended_address_independent_device	rsp_both	ext	0x18fff225	0xa6	ext	0x18fff225	data	07A622FFFFFFFF	0x22	0xffffffff	ok
+
+# LEN=04 仅是 0x22 请求的解码兼容形式。
+legacy_len_extended_address	req_decode	std	1	1	std	1	data	04012218FFF225	0x22	0x18fff225	ok
+legacy_len_extended_address_from_extended	req_decode	ext	0x18fff201	1	ext	0x18fff201	data	04012218FFF225	0x22	0x18fff225	ok
+legacy_len_rejected_in_response	rsp_decode	std	1	1	std	1	data	04012218FFF225	-	-	length_mismatch
+legacy_len_rejected_in_extended_response	rsp_decode	ext	0x18fff201	1	ext	0x18fff201	data	04012218FFF225	-	-	length_mismatch
+legacy_len_rejected_if_truncated	req_decode	std	1	1	std	1	data	04012218FFF2	-	-	length_mismatch
+legacy_len_rejected_if_padded	req_decode	std	1	1	std	1	data	04012218FFF22500	-	-	length_mismatch
+legacy_len_rejected_for_position_write	req_decode	std	1	1	std	1	data	04010D00012345	-	-	length_mismatch
+legacy_len_still_checks_device	req_decode	std	1	1	std	1	data	04022218FFF225	-	-	device_id_mismatch
+legacy_len_still_checks_new_id	req_decode	std	1	1	std	1	data	04012220000000	-	-	invalid_extended_can_id
+ack_extended_address_decode_only	rsp_decode	ext	0x18fff225	0x25	ext	0x18fff225	data	072522FEDCBA98	0x22	0xfedcba98	ok
+
+# 拒绝不能编码的请求值。
+encode_new_standard_address_zero	req_encode	std	0	0	-	-	-	-	0x02	0	invalid_standard_address
+encode_new_extended_address_too_large	req_encode	std	1	1	-	-	-	-	0x22	0x20000000	invalid_extended_can_id
+encode_reporting_period_too_short	req_encode	std	1	1	-	-	-	-	0x05	49	invalid_reporting_period
+
+# 拒绝与忽略。用组合输入固定协议校验顺序。
+valid_standard_id_unrelated	rsp_decode	std	1	1	std	0x7ff	data	07010145230100	-	-	ignored
+valid_extended_id_unrelated	req_decode	std	1	1	ext	0x1fffffff	data	-	-	-	ignored
+position_other_node	rsp_decode	std	1	1	std	2	data	07010145230100	-	-	ignored
+standard_id_same_as_extended	req_decode	ext	1	1	std	1	data	04010100	-	-	ignored
+extended_id_same_as_standard	req_decode	std	1	1	ext	1	data	04010100	-	-	ignored
+ack_readdress_standard_ignored_by_old	rsp_decode	std	1	1	std	8	data	04080200	-	-	ignored
+ack_readdress_extended_ignored_by_old	rsp_decode	std	1	1	ext	0x18fff225	data	07252200000000	-	-	ignored
+ack_wrong_extended_device	rsp_decode	ext	0x18fff225	0xa6	ext	0x18fff225	data	07252200000000	-	-	device_id_mismatch
+invalid_standard_id_before_fd	rsp_decode	std	1	1	std	0x800	fd	07010145230100	-	-	invalid_standard_can_id
+invalid_extended_id_before_rtr	req_decode	std	1	1	ext	0x20000000	rtr	4	-	-	invalid_extended_can_id
+short_fd_position	rsp_decode	std	1	1	std	1	fd	07010145230100	-	-	unsupported_can_fd
+unrelated_fd	rsp_decode	std	1	1	ext	2	fd	-	-	-	unsupported_can_fd
+unrelated_rtr	req_decode	std	1	1	std	2	rtr	0	-	-	unsupported_remote_frame
+matched_rtr	req_decode	std	1	1	std	1	rtr	4	-	-	unsupported_remote_frame
+other_classic_before_length_check	req_decode	std	1	1	std	2	data	090101000000000000	-	-	ignored
+matched_classic_too_long	req_decode	std	1	1	std	1	data	090101000000000000	-	-	data_length_exceeds_classic_can
+position_no_header	rsp_decode	std	1	1	std	1	data	-	-	-	incomplete_header
+position_partial_header	rsp_decode	std	1	1	std	1	data	0701	-	-	incomplete_header
+declared_length_too_long	req_decode	std	1	1	std	1	data	0901010000000000	-	-	declared_length_exceeds_classic_can
+position_padded	rsp_decode	std	1	1	std	1	data	0701014523010000	-	-	length_mismatch
+position_padded_and_length_updated	rsp_decode	std	1	1	std	1	data	0801014523010000	-	-	invalid_length
+position_wrong_len	rsp_decode	std	1	1	std	1	data	06010145230100	-	-	length_mismatch
+position_wrong_device	rsp_decode	std	1	1	std	1	data	07020145230100	-	-	device_id_mismatch
+unknown_function	rsp_decode	std	1	1	std	1	data	04017E00	-	-	ignored
+unknown_function_request	req_decode	std	1	1	std	1	data	04017E00	-	-	ignored
+unknown_function_wrong_device	rsp_decode	std	1	1	std	1	data	04027E00	-	-	device_id_mismatch
+unknown_function_wrong_len_and_device	rsp_decode	std	1	1	std	1	data	07027E00	-	-	length_mismatch
+known_function_wrong_length_before_parameter	req_decode	std	1	1	std	1	data	0501010100	-	-	invalid_length
+read_position_bad_parameter	req_decode	std	1	1	std	1	data	04010101	-	-	invalid_fixed_parameter
+new_standard_address_zero	req_decode	std	1	1	std	1	data	04010200	-	-	invalid_standard_address
+baud_unknown	req_decode	std	1	1	std	1	data	04010305	-	-	invalid_baud_rate
+mode_unknown	req_decode	std	1	1	std	1	data	040104FF	-	-	invalid_reporting_mode
+period_too_short	req_decode	std	1	1	std	1	data	0501053100	-	-	invalid_reporting_period
+set_zero_bad_parameter	req_decode	std	1	1	std	1	data	04010601	-	-	invalid_fixed_parameter
+direction_unknown	req_decode	std	1	1	std	1	data	04010702	-	-	invalid_direction
+read_speed_bad_parameter	req_decode	std	1	1	std	1	data	04010A01	-	-	invalid_fixed_parameter
+set_midpoint_bad_parameter	req_decode	std	1	1	std	1	data	04010C00	-	-	invalid_fixed_parameter
+set_five_turns_bad_parameter	req_decode	std	1	1	std	1	data	04010F00	-	-	invalid_fixed_parameter

@@ -1,9 +1,32 @@
 <!-- Copyright The brt-can-protocol Contributors -->
-<!-- 可选帧适配的消费方依赖与内存示例。 -->
+<!-- CMake 消费方接入和 Rust 可选帧适配示例。 -->
 
-# 帧适配示例
+# 消费方接入与帧适配
 
-运行 `cargo run --example encode_decode` 演示请求与应答的内存编解码。
+Rust 调用方可运行 `cargo run --example encode_decode` 演示请求与应答的内存编解码。
+
+## C17
+
+将本仓固定到父工程的 `3rd/brt-can-protocol`。在 CMake 3.21 及以上版本中，对实际消费目标添加以下两行（本例目标名为 `sensor_app`）。
+
+```cmake
+add_subdirectory(3rd/brt-can-protocol)
+target_link_libraries(sensor_app PRIVATE brt_can_protocol::brt_can_protocol)
+```
+
+在 C 源文件中包含 `<brt_can_protocol/protocol.h>`。父工程为库和消费目标选择一致的 CPU、指令集与浮点 ABI。宿主仿真可直接用宿主编译器构建同一份源码。
+
+[最小 C 消费者](https://github.com/MRNIU/brt-can-protocol/blob/main/c/tests/consumer/main.c) 演示主机编码查询、传感器解码请求并编码应答，以及主机接收主动上报。调用解码器前，先从原生帧保留标准／扩展 ID 和实际 Classic／RTR／FD 形态，核对 DLC 和缓冲容量后只传有效字节。位置回传的有效长度为 7，传入整个八字节驱动缓冲会触发协议长度错误。
+
+解码成功后，再按应答类型取出原始位置。静止时可以连续收到相同计数的合法帧，调用方可用各自的接收时刻刷新样本。主动上报和位置查询应答共用 `0x01`。传感器开启主动上报时，即使主机刚发过查询，下一帧的位置值也可能来自主动上报。
+
+在本仓根目录可构建并运行这个父工程示例。
+
+```sh
+cmake -S c/tests/consumer -B target/c-consumer
+cmake --build target/c-consumer
+ctest --test-dir target/c-consumer --output-on-failure --no-tests=error
+```
 
 ## embedded-can
 

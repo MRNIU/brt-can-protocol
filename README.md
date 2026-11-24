@@ -9,20 +9,26 @@
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/MRNIU/brt-can-protocol/blob/main/LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0/)
 
-布瑞特 BRT CAN 协议编解码库。Rust 2024，默认 `no_std`、无 `alloc`、零运行依赖，MSRV 为 Rust 1.85。库只转换协议值和 CAN 帧；收发、时序、重试、标定、物理换算与控制由调用方负责。
+布瑞特 BRT CAN 协议编解码库，提供 Rust 和原生 C17 两种实现。两者都能生成与解析主机请求、设备应答和主动回传帧。库只转换协议值和 CAN 帧，收发、时序、重试、标定、物理换算与控制由调用方负责。
 
 [API 文档](https://docs.rs/brt-can-protocol) · [帧适配示例](https://github.com/MRNIU/brt-can-protocol/blob/main/examples/README.md) · [协议勘误](https://github.com/MRNIU/brt-can-protocol/blob/main/ERRATA.md) · [贡献指南](https://github.com/MRNIU/brt-can-protocol/blob/main/CONTRIBUTING.md)
 
 ## 安装
+
+### Rust
 
 ```toml
 [dependencies]
 brt-can-protocol = "0.1.1"
 ```
 
-Rust 中的 crate 名为 `brt_can_protocol`。默认库与 `embedded-can` feature 支持 Rust 1.85；`embassy-stm32` 适配使用 Rust stable。
+Rust 中的 crate 名为 `brt_can_protocol`，使用 Edition 2024，默认 `no_std`、无 `alloc`、零运行依赖。默认库与 `embedded-can` feature 支持 Rust 1.85，`embassy-stm32` 适配使用 Rust stable。
 
-## 快速开始
+### C17
+
+从固定的 Git 提交引入本仓，用 CMake 3.21 或更新版本链接静态库 `brt_can_protocol::brt_can_protocol`，包含 `<brt_can_protocol/protocol.h>`。C 实现可独立构建，四个入口为 `brt_encode_request`、`brt_decode_request`、`brt_encode_response` 和 `brt_decode_response`。接收端按帧型和有效字节解码，只有返回 `BRT_OK` 时才读取输出；`BRT_IGNORED` 表示无关帧。具体接法见 [CMake 接入与可运行示例](https://github.com/MRNIU/brt-can-protocol/blob/main/examples/README.md#c17)。
+
+## Rust 快速开始
 
 ```rust
 use brt_can_protocol::protocol::{Address, Request, Response, encode_request, decode_response};
@@ -79,7 +85,7 @@ cargo run --locked --example encode_decode
 - 报文为 `[LEN, DEVICE_ID, FUNC, DATA...]`。CAN DLC 是帧控制字段给出的实际数据字节数；`LEN` 是 `DATA[0]`，包含自身。除 `0x22` 请求的兼容例外外，二者必须相等，按功能为 4、5 或 7 字节，且不接受填充尾部。`0x22` 请求的 DLC 固定为 7，解码兼容 `LEN=04` 和 `LEN=07`，编码统一输出 `LEN=07`；其应答只能为 `LEN=07`／DLC 7。
 - 当前标准地址可为 `0..=255`；新标准地址限 `1..=255`。扩展地址模式的 DEVICE_ID 取 CAN ID 低八位，例如 `0x18fff225` 对应 `0x25`。`Address::extended(can_id, device_id)` 显式保存两个字段，不自动派生或校验该关系。设址后的地址匹配和广播处理由调用方负责。
 - 位置、速度和未知状态保留全部数据位。ACK 状态 `0` 表示成功，其他值为错误码；请求匹配和设备操作结果由调用方处理。
-- 解码先校验 ID 格式并拒绝 RTR／FD，再过滤其他 ID。匹配 ID 的帧先校验长度及 DEVICE_ID；未知 FUNC 返回 `Ok(None)`，错误报文返回 `DecodeError`。
+- 解码先校验 CAN ID 位宽并拒绝 RTR／FD，再过滤其他 ID。匹配 ID 的帧先校验长度及 DEVICE_ID，再识别功能码。合法的其他 ID 或头部有效的未知 FUNC 在 Rust 中返回 `Ok(None)`，在 C 中返回 `BRT_IGNORED`。格式或参数错误分别返回 `DecodeError` 和相应的 `BRT_ERROR_*`。
 
 ## 可选帧适配
 

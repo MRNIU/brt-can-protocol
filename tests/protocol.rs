@@ -16,127 +16,207 @@ fn standard(address: u8, bytes: &[u8]) -> FrameRef<'_> {
     }
 }
 
-fn extended(address: u32, bytes: &[u8]) -> FrameRef<'_> {
-    FrameRef {
-        id: FrameId::Extended(address),
-        payload: FramePayload::Data(bytes),
+fn number(text: &str) -> i64 {
+    match text.strip_prefix("0x") {
+        Some(hex) => i64::from_str_radix(hex, 16).unwrap(),
+        None => text.parse().unwrap(),
     }
 }
 
-fn request_case(address: Address, request: Request, bytes: &[u8]) {
-    let encoded = encode_request(address, request).unwrap();
-    assert_eq!(encoded.id(), address.id());
-    assert_eq!(encoded.data(), bytes);
-    assert_eq!(encoded.dlc(), bytes.len() as u8);
-    let input = match address.id() {
-        FrameId::Standard(id) => standard(id as u8, bytes),
-        FrameId::Extended(id) => extended(id, bytes),
-    };
-    assert_eq!(decode_request(address, input).unwrap(), Some(request));
-}
-
-fn response_case(address: Address, response: Response, bytes: &[u8]) {
-    let encoded = encode_response(address, response).unwrap();
-    assert_eq!(encoded.id(), address.id());
-    assert_eq!(encoded.data(), bytes);
-    assert_eq!(encoded.dlc(), bytes.len() as u8);
-    let input = match address.id() {
-        FrameId::Standard(id) => standard(id as u8, bytes),
-        FrameId::Extended(id) => extended(id, bytes),
-    };
-    assert_eq!(decode_response(address, input).unwrap(), Some(response));
-}
-
-#[test]
-fn requests_encode_and_decode_every_documented_function() {
-    let address = Address::standard(1);
-    // 0x22、0x0B、0x0D 的请求参数使用大端；
-    // 0x22 编码统一采用 LEN=7，0x05 的回传周期仍为小端。
-    for (request, bytes) in [
-        (Request::ReadPosition, &[4, 1, 1, 0][..]),
-        (Request::SetStandardAddress(8), &[4, 1, 2, 8]),
-        (
-            Request::SetExtendedAddress(0x18ff_f225),
-            &[7, 1, 0x22, 0x18, 0xff, 0xf2, 0x25],
-        ),
-        (Request::SetBaudRate(BaudRate::Mbps1), &[4, 1, 3, 1]),
-        (
-            Request::SetReportingMode(ReportingMode::StandardPosition),
-            &[4, 1, 4, 0xaa],
-        ),
-        (Request::SetReportingPeriod(1000), &[5, 1, 5, 0xe8, 3]),
-        (Request::SetZero, &[4, 1, 6, 0]),
-        (
-            Request::SetDirection(Direction::Counterclockwise),
-            &[4, 1, 7, 1],
-        ),
-        (Request::ReadSpeed, &[4, 1, 0x0a, 0]),
-        (Request::SetSpeedSampleTime(1000), &[5, 1, 0x0b, 3, 0xe8]),
-        (Request::SetMidpoint, &[4, 1, 0x0c, 1]),
-        (
-            Request::SetPosition(0x0001_2345),
-            &[7, 1, 0x0d, 0, 1, 0x23, 0x45],
-        ),
-        (Request::SetFiveTurns, &[4, 1, 0x0f, 1]),
-    ] {
-        request_case(address, request, bytes);
+fn fixture_request(function: u8, value: i64) -> Request {
+    match function {
+        0x01 => Request::ReadPosition,
+        0x02 => Request::SetStandardAddress(u8::try_from(value).unwrap()),
+        0x22 => Request::SetExtendedAddress(u32::try_from(value).unwrap()),
+        0x03 => Request::SetBaudRate(match value {
+            0 => BaudRate::Kbps500,
+            1 => BaudRate::Mbps1,
+            2 => BaudRate::Kbps250,
+            3 => BaudRate::Kbps125,
+            4 => BaudRate::Kbps100,
+            _ => panic!("未知波特率测试值 {value}"),
+        }),
+        0x04 => Request::SetReportingMode(match value {
+            0 => ReportingMode::Query,
+            0xaa => ReportingMode::StandardPosition,
+            2 => ReportingMode::StandardSignedSpeed,
+            7 => ReportingMode::StandardUnsignedSpeed,
+            0x18 => ReportingMode::ExtendedPosition,
+            0x12 => ReportingMode::ExtendedSignedSpeed,
+            0x17 => ReportingMode::ExtendedUnsignedSpeed,
+            _ => panic!("未知回传模式测试值 {value}"),
+        }),
+        0x05 => Request::SetReportingPeriod(u16::try_from(value).unwrap()),
+        0x06 => Request::SetZero,
+        0x07 => Request::SetDirection(match value {
+            0 => Direction::Clockwise,
+            1 => Direction::Counterclockwise,
+            _ => panic!("未知方向测试值 {value}"),
+        }),
+        0x0a => Request::ReadSpeed,
+        0x0b => Request::SetSpeedSampleTime(u16::try_from(value).unwrap()),
+        0x0c => Request::SetMidpoint,
+        0x0d => Request::SetPosition(u32::try_from(value).unwrap()),
+        0x0f => Request::SetFiveTurns,
+        _ => panic!("未知请求功能码 {function:#04x}"),
     }
-    request_case(
-        Address::extended(0x18ff_f225, 0xa6).unwrap(),
-        Request::ReadPosition,
-        &[4, 0xa6, 1, 0],
-    );
+}
+
+fn fixture_response(function: u8, value: i64) -> Response {
+    match function {
+        0x01 => Response::Position(u32::try_from(value).unwrap()),
+        0x0a => Response::Speed(i32::try_from(value).unwrap()),
+        0x22 => Response::SetExtendedAddress(Status32(u32::try_from(value).unwrap())),
+        _ => Response::Ack {
+            command: match function {
+                0x02 => AckCommand::SetStandardAddress,
+                0x03 => AckCommand::SetBaudRate,
+                0x04 => AckCommand::SetReportingMode,
+                0x05 => AckCommand::SetReportingPeriod,
+                0x06 => AckCommand::SetZero,
+                0x07 => AckCommand::SetDirection,
+                0x0b => AckCommand::SetSpeedSampleTime,
+                0x0c => AckCommand::SetMidpoint,
+                0x0d => AckCommand::SetPosition,
+                0x0f => AckCommand::SetFiveTurns,
+                _ => panic!("未知应答功能码 {function:#04x}"),
+            },
+            status: Status(u8::try_from(value).unwrap()),
+        },
+    }
+}
+
+fn decode_error_code(error: DecodeError) -> &'static str {
+    match error {
+        DecodeError::InvalidStandardCanId(_) => "invalid_standard_can_id",
+        DecodeError::InvalidExtendedCanId(_) => "invalid_extended_can_id",
+        DecodeError::UnsupportedRemoteFrame => "unsupported_remote_frame",
+        DecodeError::UnsupportedCanFd => "unsupported_can_fd",
+        DecodeError::DataLengthExceedsClassicCan(_) => "data_length_exceeds_classic_can",
+        DecodeError::IncompleteHeader { .. } => "incomplete_header",
+        DecodeError::LengthMismatch { .. } => "length_mismatch",
+        DecodeError::DeclaredLengthExceedsClassicCan(_) => "declared_length_exceeds_classic_can",
+        DecodeError::DeviceIdMismatch { .. } => "device_id_mismatch",
+        DecodeError::InvalidLength { .. } => "invalid_length",
+        DecodeError::InvalidFixedParameter { .. } => "invalid_fixed_parameter",
+        DecodeError::InvalidStandardAddress(_) => "invalid_standard_address",
+        DecodeError::InvalidBaudRate(_) => "invalid_baud_rate",
+        DecodeError::InvalidReportingMode(_) => "invalid_reporting_mode",
+        DecodeError::InvalidDirection(_) => "invalid_direction",
+        DecodeError::InvalidReportingPeriod(_) => "invalid_reporting_period",
+    }
 }
 
 #[test]
-fn big_endian_requests_decode_given_bytes() {
-    for address in [
-        Address::standard(1),
-        Address::extended(0x18ff_f201, 1).unwrap(),
-    ] {
-        for (bytes, request) in [
-            (
-                &[7, 1, 0x22, 0x18, 0xff, 0xf2, 0x25][..],
-                Request::SetExtendedAddress(0x18ff_f225),
-            ),
-            (&[5, 1, 0x0b, 3, 0xe8], Request::SetSpeedSampleTime(1000)),
-            (&[7, 1, 0x0d, 0, 1, 0x23, 0x45], Request::SetPosition(74565)),
-            (
-                &[7, 1, 0x0d, 0x89, 0xab, 0xcd, 0xef],
-                Request::SetPosition(0x89ab_cdef),
-            ),
-        ] {
-            let frame = FrameRef {
-                id: address.id(),
-                payload: FramePayload::Data(bytes),
+fn protocol_matches_shared_vectors() {
+    for line in include_str!("fixtures/brt_v2_7.tsv").lines() {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let columns: Vec<_> = line.split('\t').collect();
+        let [
+            case,
+            operation,
+            target_format,
+            target_id,
+            device_id,
+            frame_format,
+            frame_id,
+            frame_kind,
+            payload,
+            function,
+            value,
+            result,
+        ] = columns.as_slice()
+        else {
+            panic!("测试向量列数错误 {line}");
+        };
+        let device_id = u8::try_from(number(device_id)).unwrap();
+        let target_id = u32::try_from(number(target_id)).unwrap();
+        let address = match *target_format {
+            "std" => {
+                assert_eq!(target_id, u32::from(device_id), "{case}");
+                Address::standard(device_id)
+            }
+            "ext" => Address::extended(target_id, device_id).unwrap(),
+            _ => panic!("地址格式错误 {case}"),
+        };
+        let function = || u8::try_from(number(function)).unwrap();
+        let request = || fixture_request(function(), number(value));
+        let response = || fixture_response(function(), number(value));
+
+        if *operation == "req_encode" {
+            let error = encode_request(address, request()).unwrap_err();
+            let actual = match error {
+                EncodeError::InvalidExtendedCanId(_) => "invalid_extended_can_id",
+                EncodeError::InvalidStandardAddress(_) => "invalid_standard_address",
+                EncodeError::InvalidReportingPeriod(_) => "invalid_reporting_period",
             };
-            assert_eq!(decode_request(address, frame), Ok(Some(request)));
-            assert_eq!(encode_request(address, request).unwrap().data(), bytes);
+            assert_eq!(actual, *result, "{case}");
+            continue;
+        }
+
+        let id = match *frame_format {
+            "std" => FrameId::Standard(u16::try_from(number(frame_id)).unwrap()),
+            "ext" => FrameId::Extended(u32::try_from(number(frame_id)).unwrap()),
+            _ => panic!("帧 ID 格式错误 {case}"),
+        };
+        let mut bytes = Vec::new();
+        let payload = match *frame_kind {
+            "rtr" => FramePayload::Remote {
+                dlc: u8::try_from(number(payload)).unwrap(),
+            },
+            "data" | "fd" => {
+                if *payload != "-" {
+                    assert_eq!(payload.len() % 2, 0, "{case}");
+                    for pair in payload.as_bytes().chunks_exact(2) {
+                        bytes.push(
+                            u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap(),
+                        );
+                    }
+                }
+                if *frame_kind == "data" {
+                    FramePayload::Data(&bytes)
+                } else {
+                    FramePayload::Fd(&bytes)
+                }
+            }
+            _ => panic!("帧类型错误 {case}"),
+        };
+        let frame = FrameRef { id, payload };
+        let encoded = match *operation {
+            "req_both" => Some(encode_request(address, request()).unwrap()),
+            "rsp_both" => Some(encode_response(address, response()).unwrap()),
+            "req_decode" | "rsp_decode" => None,
+            _ => panic!("操作类型错误 {case}"),
+        };
+        if let Some(encoded) = encoded {
+            assert_eq!(encoded.as_ref(), frame, "{case}");
+            assert_eq!(usize::from(encoded.dlc()), bytes.len(), "{case}");
+        }
+
+        // 从给定帧解码，验证结果独立于上面的编码结果。
+        match *operation {
+            "req_both" | "req_decode" => assert_eq!(
+                decode_request(address, frame).map_err(decode_error_code),
+                expected_decode(result, request),
+                "{case}"
+            ),
+            "rsp_both" | "rsp_decode" => assert_eq!(
+                decode_response(address, frame).map_err(decode_error_code),
+                expected_decode(result, response),
+                "{case}"
+            ),
+            _ => unreachable!(),
         }
     }
 }
 
-#[test]
-fn extended_address_request_accepts_len_four_only_with_seven_data_bytes() {
-    for address in [
-        Address::standard(1),
-        Address::extended(0x18ff_f201, 1).unwrap(),
-    ] {
-        let frame = FrameRef {
-            id: address.id(),
-            payload: FramePayload::Data(&[4, 1, 0x22, 0x18, 0xff, 0xf2, 0x25]),
-        };
-        assert_eq!(
-            decode_request(address, frame),
-            Ok(Some(Request::SetExtendedAddress(0x18ff_f225)))
-        );
-        assert_eq!(
-            decode_response(address, frame),
-            Err(DecodeError::LengthMismatch {
-                declared: 4,
-                actual: 7,
-            })
-        );
+fn expected_decode<T>(result: &str, message: impl FnOnce() -> T) -> Result<Option<T>, &str> {
+    match result {
+        "ok" => Ok(Some(message())),
+        "ignored" => Ok(None),
+        error => Err(error),
     }
 }
 
@@ -228,209 +308,10 @@ fn extended_address_length_exception_keeps_header_and_frame_validation() {
 }
 
 #[test]
-fn extended_address_example_response_matches_explicit_new_address() {
-    let old = Address::standard(1);
-    let new = Address::extended(0x18ff_f225, 0x25).unwrap();
-    let bytes = &[7, 0x25, 0x22, 0, 0, 0, 0];
-    response_case(new, Response::SetExtendedAddress(Status32(0)), bytes);
-    assert_eq!(decode_response(old, extended(0x18ff_f225, bytes)), Ok(None));
-}
-
-#[test]
-fn extended_address_response_decodes_big_endian_status_without_losing_bits() {
-    // 非零且各不相同的字节用于区分端序并验证完整状态位。
-    let address = Address::extended(0x18ff_f225, 0x25).unwrap();
-    assert_eq!(
-        decode_response(
-            address,
-            extended(0x18ff_f225, &[7, 0x25, 0x22, 0xfe, 0xdc, 0xba, 0x98]),
-        ),
-        Ok(Some(Response::SetExtendedAddress(Status32(0xfedc_ba98))))
-    );
-}
-
-#[test]
-fn baud_rates_and_reporting_modes_keep_all_wire_values() {
-    let address = Address::standard(1);
-    for (value, byte) in [
-        (BaudRate::Kbps500, 0),
-        (BaudRate::Mbps1, 1),
-        (BaudRate::Kbps250, 2),
-        (BaudRate::Kbps125, 3),
-        (BaudRate::Kbps100, 4),
-    ] {
-        request_case(address, Request::SetBaudRate(value), &[4, 1, 3, byte]);
-    }
-    for (value, byte) in [
-        (ReportingMode::Query, 0),
-        (ReportingMode::StandardPosition, 0xaa),
-        (ReportingMode::StandardSignedSpeed, 2),
-        (ReportingMode::StandardUnsignedSpeed, 7),
-        (ReportingMode::ExtendedPosition, 0x18),
-        (ReportingMode::ExtendedSignedSpeed, 0x12),
-        (ReportingMode::ExtendedUnsignedSpeed, 0x17),
-    ] {
-        request_case(address, Request::SetReportingMode(value), &[4, 1, 4, byte]);
-    }
-}
-
-#[test]
-fn responses_encode_and_decode_every_documented_function_and_status_bit() {
-    let address = Address::standard(1);
-    for (command, function) in [
-        (AckCommand::SetStandardAddress, 0x02),
-        (AckCommand::SetBaudRate, 0x03),
-        (AckCommand::SetReportingMode, 0x04),
-        (AckCommand::SetReportingPeriod, 0x05),
-        (AckCommand::SetZero, 0x06),
-        (AckCommand::SetDirection, 0x07),
-        (AckCommand::SetSpeedSampleTime, 0x0b),
-        (AckCommand::SetMidpoint, 0x0c),
-        (AckCommand::SetPosition, 0x0d),
-        (AckCommand::SetFiveTurns, 0x0f),
-    ] {
-        response_case(
-            address,
-            Response::Ack {
-                command,
-                status: Status(0xff),
-            },
-            &[4, 1, function, 0xff],
-        );
-    }
-    for (response, bytes) in [
-        (
-            Response::Position(0x8001_2345),
-            &[7, 1, 1, 0x45, 0x23, 1, 0x80][..],
-        ),
-        (
-            Response::Speed(-74565),
-            &[7, 1, 0x0a, 0xbb, 0xdc, 0xfe, 0xff],
-        ),
-        (
-            Response::SetExtendedAddress(Status32(0xfedc_ba98)),
-            &[7, 1, 0x22, 0xfe, 0xdc, 0xba, 0x98],
-        ),
-    ] {
-        response_case(address, response, bytes);
-    }
-}
-
-#[test]
-fn protocol_value_boundaries_are_not_physical_range_inference() {
-    for address in [Address::standard(0), Address::standard(255)] {
-        request_case(
-            address,
-            Request::ReadPosition,
-            &[4, address.device_id(), 1, 0],
-        );
-    }
-    for address in [
-        Address::extended(0, 0).unwrap(),
-        Address::extended(0x1fff_ffff, 255).unwrap(),
-    ] {
-        request_case(
-            address,
-            Request::ReadPosition,
-            &[4, address.device_id(), 1, 0],
-        );
-    }
-    let address = Address::standard(1);
-    for (request, bytes) in [
-        (Request::SetStandardAddress(1), &[4, 1, 2, 1][..]),
-        (Request::SetStandardAddress(255), &[4, 1, 2, 255]),
-        (Request::SetDirection(Direction::Clockwise), &[4, 1, 7, 0]),
-        (Request::SetExtendedAddress(0), &[7, 1, 0x22, 0, 0, 0, 0]),
-        (
-            Request::SetExtendedAddress(0x1fff_ffff),
-            &[7, 1, 0x22, 0x1f, 0xff, 0xff, 0xff],
-        ),
-        (Request::SetReportingPeriod(50), &[5, 1, 5, 50, 0]),
-        (
-            Request::SetReportingPeriod(u16::MAX),
-            &[5, 1, 5, 0xff, 0xff],
-        ),
-        (Request::SetSpeedSampleTime(0), &[5, 1, 0x0b, 0, 0]),
-        (
-            Request::SetSpeedSampleTime(u16::MAX),
-            &[5, 1, 0x0b, 0xff, 0xff],
-        ),
-        (Request::SetPosition(0), &[7, 1, 0x0d, 0, 0, 0, 0]),
-        (
-            Request::SetPosition(u32::MAX),
-            &[7, 1, 0x0d, 0xff, 0xff, 0xff, 0xff],
-        ),
-    ] {
-        request_case(address, request, bytes);
-    }
-    for (response, bytes) in [
-        (Response::Position(0), &[7, 1, 1, 0, 0, 0, 0][..]),
-        (
-            Response::Position(u32::MAX),
-            &[7, 1, 1, 0xff, 0xff, 0xff, 0xff],
-        ),
-        (Response::Speed(i32::MIN), &[7, 1, 0x0a, 0, 0, 0, 0x80]),
-        (
-            Response::Speed(i32::MAX),
-            &[7, 1, 0x0a, 0xff, 0xff, 0xff, 0x7f],
-        ),
-        (
-            Response::SetExtendedAddress(Status32(u32::MAX)),
-            &[7, 1, 0x22, 0xff, 0xff, 0xff, 0xff],
-        ),
-    ] {
-        response_case(address, response, bytes);
-    }
-}
-
-#[test]
-fn addresses_keep_identifier_format_device_id_and_new_address_independent() {
+fn extended_address_accessors_keep_can_id_and_device_id_independent() {
     let extended_address = Address::extended(0x18ff_f225, 0xa6).unwrap();
     assert_eq!(extended_address.id(), FrameId::Extended(0x18ff_f225));
     assert_eq!(extended_address.device_id(), 0xa6);
-    assert_eq!(
-        decode_response(
-            extended_address,
-            extended(0x18ff_f225, &[7, 0x25, 0x22, 0, 0, 0, 0])
-        ),
-        Err(DecodeError::DeviceIdMismatch {
-            expected: 0xa6,
-            actual: 0x25
-        })
-    );
-    response_case(
-        extended_address,
-        Response::SetExtendedAddress(Status32(u32::MAX)),
-        &[7, 0xa6, 0x22, 0xff, 0xff, 0xff, 0xff],
-    );
-    let old = Address::standard(1);
-    let new = Address::standard(8);
-    request_case(old, Request::SetStandardAddress(8), &[4, 1, 2, 8]);
-    let acknowledgement = Response::Ack {
-        command: AckCommand::SetStandardAddress,
-        status: Status(0),
-    };
-    response_case(new, acknowledgement, &[4, 8, 2, 0]);
-    assert_eq!(
-        decode_response(old, standard(8, &[4, 8, 2, 0])).unwrap(),
-        None
-    );
-    let standard_frame = encode_request(old, Request::ReadPosition).unwrap();
-    let extended = Address::extended(1, 1).unwrap();
-    assert_eq!(
-        decode_request(extended, standard_frame.as_ref()).unwrap(),
-        None
-    );
-    assert_eq!(
-        decode_request(
-            old,
-            encode_request(extended, Request::ReadPosition)
-                .unwrap()
-                .as_ref()
-        )
-        .unwrap(),
-        None
-    );
 }
 
 #[test]

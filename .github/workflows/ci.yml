@@ -1,5 +1,6 @@
+# Copyright The odrive-can-driver Contributors
 # Copyright The brt-can-protocol Contributors
-# 验证默认协议库、可选帧转换、文档、交叉构建和发布前打包；不执行真实发布。
+# 验证 Rust 与 C17 协议库、可选帧转换、文档、交叉构建和发布前打包。
 
 name: CI
 
@@ -91,4 +92,58 @@ jobs:
       - run: cargo metadata --locked --format-version 1 --no-deps --features embedded-can
       - run: cargo metadata --locked --format-version 1 --no-deps --features embassy-stm32,embassy-stm32/stm32h723vg
       - run: cargo package --locked
+      - run: cargo package --locked --list | grep -Fx tests/fixtures/brt_v2_7.tsv
       - run: cargo publish --locked --dry-run
+
+  c_host:
+    name: C17 宿主 (${{ matrix.compiler }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - compiler: gcc
+            sanitizer_flags: ""
+          - compiler: clang
+            sanitizer_flags: "-fsanitize=address,undefined -fno-sanitize-recover=all"
+    env:
+      CC: ${{ matrix.compiler }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 编译并运行共享协议向量和参数校验
+        run: |
+          cmake -S . -B target/c-host -DCMAKE_BUILD_TYPE=Release \
+            "-DCMAKE_C_FLAGS=-Wall -Wextra -Wpedantic -Werror ${{ matrix.sanitizer_flags }}"
+          cmake --build target/c-host --parallel
+          ctest --test-dir target/c-host --output-on-failure --no-tests=error
+      - name: 验证外部 CMake 消费者
+        if: matrix.compiler == 'gcc'
+        run: |
+          cmake -S c/tests/consumer -B target/c-consumer -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON \
+            "-DCMAKE_C_FLAGS=-Wall -Wextra -Wpedantic -Werror"
+          cmake --build target/c-consumer --parallel
+          ctest --test-dir target/c-consumer --show-only=json-v1 | python3 -c \
+            'import json, sys; assert [test["name"] for test in json.load(sys.stdin)["tests"]] == ["brt_can_consumer"]'
+          ctest --test-dir target/c-consumer --output-on-failure --no-tests=error
+      - name: 验证 C API 文档
+        if: matrix.compiler == 'gcc'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends doxygen
+          # Doxygen 通过文件文档检查 C 全局函数。
+          grep -Fq '@file' c/include/brt_can_protocol/protocol.h
+          doxygen Doxyfile
+
+  c_cortex_m7:
+    name: C17 Cortex-M7 链接
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 ARM GCC 和 Newlib
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-arm-none-eabi
+      - name: 交叉链接 CMake 消费者
+        run: |
+          cmake -S c/tests/consumer -B target/c-consumer-m7 -DBUILD_TESTING=OFF \
+            --toolchain "$GITHUB_WORKSPACE/c/tests/consumer/cortex-m7.cmake"
+          cmake --build target/c-consumer-m7 --parallel
